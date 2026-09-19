@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Studio — Minimalist QR Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: ['class', '[data-theme="dark"]'],
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['Space Mono', 'monospace'],
+        }
+      }
+    }
+  }
+</script>
+<style>
+  /* ---------- Custom Design Tokens & Transitions ---------- */
+  :root {
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-text: #ffffff;
+    --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  }
+
+  :root[data-theme="dark"] {
+    --bg-main: #090d16;
+    --card-bg: #111827;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #1f2937;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-text: #ffffff;
+    --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .app-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow);
+  }
+
+  .custom-input {
+    background-color: transparent;
+    border: 1.5px solid var(--border-color);
+    color: var(--text-main);
+    transition: all 0.2s ease;
+  }
+
+  .custom-input:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  }
+
+  /* Custom styling for color inputs */
+  input[type="color"] {
+    -webkit-appearance: none;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: 1.5px solid var(--border-color); border-radius: 8px; }
+
+  /* Toast notification animation */
+  .toast {
+    transform: translateY(1rem);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-4 sm:p-6 md:p-8">
+
+  <header class="w-full max-w-4xl flex items-center justify-between mb-8">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-500/20">
+        QR
+      </div>
+      <div>
+        <h1 class="font-bold text-lg tracking-tight">QR Studio</h1>
+        <p class="text-xs text-[var(--text-muted)] font-mono">Minimalist Link Generator</p>
+      </div>
+    </div>
+    
+    <button id="themeToggleBtn" type="button" class="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-[var(--border-color)] hover:border-indigo-500 transition-colors bg-[var(--card-bg)] shadow-sm">
+      <svg id="themeIcon" class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round5" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+      </svg>
+      <span id="themeLabel">Dark Mode</span>
+    </button>
+  </header>
+
+  <main class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+    
+    <!-- Input & Controls Section (Left Column) -->
+    <section class="app-card rounded-2xl p-6 md:p-8 md:col-span-7 flex flex-col space-y-6">
+      
+      <!-- URL Input Field -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center">
+          <label for="urlInput" class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Destination URL or Text</label>
+          <span id="charCount" class="text-[10px] font-mono text-[var(--text-muted)]">0 chars</span>
+        </div>
+        <div class="relative">
+          <input 
+            id="urlInput" 
+            type="text" 
+            placeholder="https://example.com/my-link" 
+            class="custom-input w-full px-4 py-3.5 rounded-xl font-mono text-sm"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="clearBtn" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-main)] hidden text-xs px-2 py-1 bg-gray-200 dark:bg-gray-800 rounded-lg">Clear</button>
+        </div>
+        <p id="errorMsg" class="text-xs text-rose-500 font-medium h-4"></p>
+      </div>
+
+      <!-- Customization Grid -->
+      <div class="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border-color)]">
+        
+        <!-- Size Selector -->
+        <div class="space-y-2">
+          <label for="sizeSelect" class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Resolution</label>
+          <select id="sizeSelect" class="custom-input w-full px-3 py-2.5 rounded-xl text-sm font-mono cursor-pointer">
+            <option value="200">200 × 200 px</option>
+            <option value="300" selected>300 × 300 px</option>
+            <option value="500">500 × 500 px</option>
+            <option value="800">800 × 800 px (HD)</option>
+          </select>
+        </div>
+
+        <!-- Error Correction Level -->
+        <div class="space-y-2">
+          <label for="eccSelect" class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Error Correction</label>
+          <select id="eccSelect" class="custom-input w-full px-3 py-2.5 rounded-xl text-sm font-mono cursor-pointer">
+            <option value="L">Level L (7%)</option>
+            <option value="M" selected>Level M (15%)</option>
+            <option value="Q">Level Q (25%)</option>
+            <option value="H">Level H (30%)</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Color Pickers Row -->
+      <div class="grid grid-cols-2 gap-4 pt-2">
+        <div class="space-y-2">
+          <label for="sizeSelect" class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Resolution</label>
+          <select id="sizeSelect" class="custom-input w-full px-3 py-2.5 rounded-xl text-sm font-mono cursor-pointer">
+            <option value="200">200 × 200 px</option>
+            <option value="300" selected>300 × 300 px</option>
+            <option value="500">500 × 500 px</option>
+            <option value="800">800 × 800 px (HD)</option>
+          </select>
+        </div>
+
+        <!-- Error Correction Level (Locked to H for Watermark Support) -->
+        <div class="space-y-2">
+          <label for="eccSelect" class="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">Correction (Watermark)</label>
+          <select id="eccSelect" class="custom-input w-full px-3 py-2.5 rounded-xl text-sm font-mono cursor-pointer">
+            <option value="H" selected>Level H (30% - Watermark Safe)</option>
+            <option value="Q">Level Q (25%)</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Color Pickers Row -->
+          <button type="button" class="preset-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border-color)] hover:border-indigo-500 hover:text-indigo-500 transition-colors" data-url="mailto:hello@example.com">Email</button>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="app-card rounded-2xl p-6 md:p-8 md:col-span-5 flex flex-col items-center justify-center space-y-6">
+      
+      <!-- QR Stage Container -->
+      <div id="qrStage" class="w-full aspect-square max-h-[300px] flex items-center justify-center bg-white border-2 border-dashed border-[var(--border-color)] rounded-2xl p-4 transition-all overflow-hidden relative shadow-inner">
+        <div id="emptyState" class="text-center p-6 text-[var(--text-muted)]">
+          <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+          </svg>
+          <p class="text-xs font-medium">Enter a link to generate your QR code instantly</p>
+        </div>
+        <div id="qrContainer" class="hidden flex items-center justify-center"></div>
+      </div>
+
+      <!-- Domain Indicator Info -->
+      <div id="metaInfo" class="text-center font-mono text-xs text-[var(--text-muted)] h-5"></div>
+
+      <!-- Action Buttons -->
+      <div class="grid grid-cols-2 gap-3 w-full">
+        <button id="copyBtn" type="button" disabled class="py-3 px-4 rounded-xl font-medium text-xs border border-[var(--border-color)] hover:border-indigo-500 hover:text-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round5" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+          <span>Copy Link</span>
+        </button>
+
+        <button id="downloadBtn" type="button" disabled class="py-3 px-4 rounded-xl font-medium text-xs bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-indigo-500/20 flex items-center justify-center space-x-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span>Download PNG</span>
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Hidden container for raw QR rendering calculation -->
+  <div id="qrHidden" class="hidden"></div>
+
+  <div id="toast" class="toast fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2.5 rounded-xl text-xs font-medium shadow-xl z-50"></div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlInput = document.getElementById('urlInput');
+      const clearBtn = document.getElementById('clearBtn');
+      const charCount = document.getElementById('charCount');
+      const errorMsg = document.getElementById('errorMsg');
+      const sizeSelect = document.getElementById('sizeSelect');
+      const eccSelect = document.getElementById('eccSelect');
+      const colorDark = document.getElementById('colorDark');
+      const colorLight = document.getElementById('colorLight');
+      const emptyState = document.getElementById('emptyState');
+      const qrContainer = document.getElementById('qrContainer');
+      const qrHidden = document.getElementById('qrHidden');
+      const metaInfo = document.getElementById('metaInfo');
+      const copyBtn = document.getElementById('copyBtn');
+      const downloadBtn = document.getElementById('downloadBtn');
+      const themeToggleBtn = document.getElementById('themeToggleBtn');
+      const themeLabel = document.getElementById('themeLabel');
+      const toast = document.getElementById('toast');
+      const presetBtns = document.querySelectorAll('.preset-btn');
+
+      let debounceTimer = null;
+      let currentCanvas = null;
+      let activeText = '';
+
+      // Theme toggle functionality
+      function setTheme(isDark) {
+        if (isDark) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.classList.add('dark');
+          themeLabel.textContent = 'Light Mode';
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.classList.remove('dark');
+          themeLabel.textContent = 'Dark Mode';
+        }
+      }
+
+      themeToggleBtn.addEventListener('click', () => {
+        const isCurrentlyDark = document.documentElement.classList.contains('dark');
+        setTheme(!isCurrentlyDark);
+      });
+
+      // Toast notification helper
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => {
+          toast.classList.remove('show');
+        }, 2000);
+      }
+
+      // Error correction map for qrcode.js
+      function getEccLevel(val) {
+        return {
+          L: QRCode.CorrectLevel.L,
+          M: QRCode.CorrectLevel.M,
+          Q: QRCode.CorrectLevel.Q,
+          H: QRCode.CorrectLevel.H
+        }[val] || QRCode.CorrectLevel.M;
+      }
+
+      // Input sanitization & normalization
+      function parseInput(raw) {
+        const text = raw.trim();
+        if (!text) return { ok: false, text: '' };
+
+        // Check if input looks like a valid URL or domain
+        const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text);
+        const looksLikeDomain = /^[^\s]+\.[^\s]+$/.test(text) || /^www\./i.test(text);
+
+        if (hasProtocol) {
+          try {
+            const u = new URL(text);
+            return { ok: true, text: text, host: u.host };
+          } catch (e) {
+            return { ok: true, text: text };
+          }
+        } else if (looksLikeDomain) {
+          const formattedUrl = 'https://' + text;
+          try {
+            const u = new URL(formattedUrl);
+            return { ok: true, text: formattedUrl, host: u.host };
+          } catch (e) {
+            return { ok: true, text: text };
+          }
+        }
+        return { ok: true, text: text };
+      }
+
+      // Render QR Code function
+      function renderQR() {
+        const rawVal = urlInput.value;
+        charCount.textContent = rawVal.length + ' chars';
+        clearBtn.style.display = rawVal.length > 0 ? 'block' : 'none';
+        errorMsg.textContent = '';
+
+        const parsed = parseInput(rawVal);
+        if (!parsed.ok || !parsed.text) {
+          emptyState.classList.remove('hidden');
+          qrContainer.classList.add('hidden');
+          qrContainer.innerHTML = '';
+          metaInfo.textContent = '';
+          copyBtn.disabled = true;
+          downloadBtn.disabled = true;
+          currentCanvas = null;
+          activeText = '';
+          return;
+        }
+
+        const size = parseInt(sizeSelect.value, 10);
+        const ecc = eccSelect.value; // Defaults to H for watermark resilience
+        const ink = colorDark.value;
+        const bg = colorLight.value;
+
+        qrHidden.innerHTML = '';
+        try {
+          new QRCode(qrHidden, {
+            text: parsed.text,
+            width: size,
+            height: size,
+            colorDark: ink,
+            colorLight: bg,
+            correctLevel: getEccLevel(ecc)
+          });
+        } catch (err) {
+          errorMsg.textContent = 'Input is too long or invalid for this setting.';
+          return;
+        }
+
+        const generatedCanvas = qrHidden.querySelector('canvas');
+        if (!generatedCanvas) {
+          errorMsg.textContent = 'Failed to generate code image.';
+          return;
+        }
+
+        // Add proper quiet zone margin around the QR code
+        const quietMargin = Math.max(16, Math.round(size * 0.1));
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = generatedCanvas.width + quietMargin * 2;
+        finalCanvas.height = generatedCanvas.height + quietMargin * 2;
+        const ctx = finalCanvas.getContext('2d');
+        
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+        ctx.drawImage(generatedCanvas, quietMargin, quietMargin);
+
+        // --- SUBTLE WATERMARK EMBEDDING ("feby") ---
+        // Since Error Correction Level H supports up to 30% damage/overlay without scannability loss,
+        // we embed a clean, subtle signature badge in the exact center of the QR canvas.
+        const centerX = finalCanvas.width / 2;
+        const centerY = finalCanvas.height / 2;
+        const badgeSizeW = Math.round(finalCanvas.width * 0.22);
+        const badgeSizeH = Math.round(finalCanvas.height * 0.10);
+
+        ctx.save();
+        ctx.fillStyle = bg;
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        // Rounded badge container
+        if (ctx.roundRect) {
+          ctx.roundRect(centerX - badgeSizeW/2, centerY - badgeSizeH/2, badgeSizeW, badgeSizeH, 6);
+        } else {
+          ctx.rect(centerX - badgeSizeW/2, centerY - badgeSizeH/2, badgeSizeW, badgeSizeH);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        // Watermark Text "feby"
+        ctx.fillStyle = ink;
+        ctx.font = `bold ${Math.max(11, Math.round(badgeSizeH * 0.5))}px 'Space Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('feby', centerX, centerY);
+        ctx.restore();
+        // ------------------------------------------
+
+        // Display preview
+        emptyState.classList.add('hidden');
+        qrContainer.classList.remove('hidden');
+        qrContainer.innerHTML = '';
+
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = finalCanvas.width;
+        previewCanvas.height = finalCanvas.height;
+        previewCanvas.className = 'max-w-full max-h-[220px] object-contain rounded-lg shadow-sm';
+        previewCanvas.getContext('2d').drawImage(finalCanvas, 0, 0);
+        
+        qrContainer.appendChild(previewCanvas);
+
+        currentCanvas = finalCanvas;
+        activeText = parsed.text;
+
+        if (parsed.host) {
+          metaInfo.innerHTML = `Target: <span class="text-indigo-500 font-semibold">${parsed.host}</span> <span class="text-[10px] ml-1 opacity-70">(Watermarked)</span>`;
+        } else {
+          metaInfo.innerHTML = `Encoded as <span class="text-indigo-500 font-semibold">Plain Text</span> <span class="text-[10px] ml-1 opacity-70">(Watermarked)</span>`;
+        }
+
+        copyBtn.disabled = false;
+        downloadBtn.disabled = false;
+      }
+
+      function scheduleRender() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderQR, 150);
+      }
+
+      // Event Listeners
+      urlInput.addEventListener('input', scheduleRender);
+      sizeSelect.addEventListener('change', renderQR);
+      eccSelect.addEventListener('change', renderQR);
+      colorDark.addEventListener('input', scheduleRender);
+      colorLight.addEventListener('input', scheduleRender);
+
+      clearBtn.addEventListener('click', () => {
+        urlInput.value = '';
+        renderQR();
+        urlInput.focus();
+      });
+
+      // Preset buttons handling
+      presetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          urlInput.value = btn.getAttribute('data-url');
+          renderQR();
+          showToast('Loaded preset link');
+        });
+      });
+
+      // Copy Link Button
+      copyBtn.addEventListener('click', async () => {
+        if (!activeText) return;
+        try {
+          await navigator.clipboard.writeText(activeText);
+          showToast('Link copied to clipboard!');
+        } catch (err) {
+          // Fallback mechanism
+          const textarea = document.createElement('textarea');
+          textarea.value = activeText;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          showToast('Link copied!');
+        }
+      });
+
+      // Download PNG Button
+      downloadBtn.addEventListener('click', () => {
+        if (!currentCanvas) return;
+        try {
+          const dataUrl = currentCanvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          const cleanName = activeText.replace(/^https?:\/\//, '').split(/[/?#]/)[0].replace(/[^a-z0-9.-]/gi, '-') || 'qrcode';
+          link.href = dataUrl;
+          link.download = `qr-${cleanName}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast('QR code downloaded successfully!');
+        } catch (err) {
+          showToast('Download failed. Try right-clicking preview.');
+        }
+      });
+
+      // Initialize with default sample
+      urlInput.value = 'https://github.com';
+      renderQR();
+    });
+  </script>
+</body>
+</html>
